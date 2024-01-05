@@ -1,0 +1,32 @@
+import os
+import clip
+import torch
+
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from torch.utils.data import DataLoader
+from torchvision.datasets import CIFAR100
+from tqdm import tqdm
+
+# Load the model
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model, preprocess = clip.load('ViT-L/14', device)
+
+# Load the dataset
+# root = os.path.expanduser("~/.cache")
+# train = CIFAR100(root, download=True, train=True, transform=preprocess)
+# test = CIFAR100(root, download=True, train=False, transform=preprocess)
+# Just imagine it returns a list of 5 frames for now
+
+# visual ops
+self.conv_v_1 = nn.Conv2d(vD, aD, kernel_size=1)
+# self.conv_v_2 = nn.Conv2d(128, 128, kernel_size=1)
+self.relu = nn.ReLU(inplace=True)
+
+for images, labels in tqdm(DataLoader(dataset, batch_size=100)):
+    with torch.no_grad():
+	    features_of_five_frames = model.encode_image(images.to(device))
+    # visual_tokens = v_a_project_hot(features_of_five_frames) # vD == aD
+	visual_tokens = self.conv_v_1(features_of_five_frames)
+    visual_tokens = self.relu(visual_tokens)
+    tokens_input_to_conformer_encoder = concat(visual_tokens, audio_tokens_from_first_phrase)		
