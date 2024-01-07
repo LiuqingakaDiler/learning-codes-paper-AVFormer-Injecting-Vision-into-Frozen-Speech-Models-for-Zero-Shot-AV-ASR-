@@ -23,10 +23,40 @@ self.conv_v_1 = nn.Conv2d(vD, aD, kernel_size=1)
 # self.conv_v_2 = nn.Conv2d(128, 128, kernel_size=1)
 self.relu = nn.ReLU(inplace=True)
 
+"""
+:param ast_x: the input spectrogram, expected shape: (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
+:return: prediction
+"""
+# expect input ast_x = (batch_size, time_frame_num, frequency_bins), e.g., (12, 1024, 128)
+# ast_x = ast_x.unsqueeze(1)
+# ast_x = ast_x.transpose(2, 3)
+features = features.unsqueeze(1)
+features = features.transpose(2, 3)
+
+# B = ast_x.shape[0]
+# ast_x = self.v.patch_embed(ast_x)
+# frozen tokenizer+linear projection in AST
+audio_tokens = self.v.patch_embed(features) # audio_tokens tN
+
+# Lightweight FF adaptor Hot in first phrase
+# ff_adapted_audio_tokens = audio_tokens + self.mlp_hot(self.norm_2(audio_tokens)) # frozen from first
+
+
 for images, labels in tqdm(DataLoader(dataset, batch_size=100)):
     with torch.no_grad():
 	    features_of_five_frames = model.encode_image(images.to(device))
     # visual_tokens = v_a_project_hot(features_of_five_frames) # vD == aD
 	visual_tokens = self.conv_v_1(features_of_five_frames)
     visual_tokens = self.relu(visual_tokens)
-    tokens_input_to_conformer_encoder = concat(visual_tokens, audio_tokens_from_first_phrase)		
+    tokens_input_to_ff_adapter = concat(visual_tokens, audio_tokens)
+	with torch.no_grad():
+        ff_adapted_av_tokens = tokens_input_to_ff_adapter + self.mlp_hot(self.norm_2(tokens_input_to_ff_adapter))
+	
+	
+    # BestRQModel.forward() should return encoded features not only logits for later decode process in second phrase
+    # change bestrq_model.py forward() for frozen model inference usage
+    ##? For first phrase, since the purpose is to train the adaper, the frozen model should return logits as well as acc
+    brq = BestRQModel(...).to(accelerator)
+    brq.load(pretrained_checkpoint)
+	with torch.no_grad():
+	    encoded_v_contextualized_a_tokens = brq(ff_adapted_av_tokens) #t^N for second phrase
