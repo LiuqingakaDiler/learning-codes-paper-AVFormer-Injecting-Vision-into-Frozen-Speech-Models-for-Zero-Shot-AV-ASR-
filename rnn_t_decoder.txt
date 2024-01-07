@@ -1,0 +1,34 @@
+    # check full content in edgedict-master\rnnt\models.py
+	# need to pretrain the decoder as well as best-rq based on paper
+	
+	def greedy_decode(self, xs, xlen):
+        # encoder
+        # h_enc, _ = self.encoder(xs)
+		
+		xs = encoded_a_tokens                  # for first phrase
+		xs = encoded_v_contextualized_a_tokens # for second phrase
+		
+        # decoder be careful to the dimensionality issues
+        h_dec, (h_prev, c_prev) = self.decoder(xs.new_empty(xs.shape[0], 0))
+        y_seq = []
+        log_p = []
+        # greedy
+        for i in range(h_enc.shape[1]):
+            # joint
+            logits = self.joint(h_enc[:, i], h_dec[:, 0])
+            probs = F.log_softmax(logits, dim=1)
+            prob, pred = torch.max(probs, dim=1)
+            y_seq.append(pred)
+            log_p.append(prob)
+            # replace non blank entities with new state
+            h_dec_new, (h_next, c_next) = self.decoder(
+                pred.unsqueeze(-1), (h_prev, c_prev))
+            h_dec[pred != self.blank, ...] = h_dec_new[pred != self.blank, ...]
+            h_prev[:, pred != self.blank, :] = h_next[:, pred != self.blank, :]
+            c_prev[:, pred != self.blank, :] = c_next[:, pred != self.blank, :]
+        y_seq = torch.stack(y_seq, dim=1)
+        log_p = torch.stack(log_p, dim=1).sum(dim=1)
+        y_seq_truncated = []
+        for seq, seq_len in zip(y_seq, xlen):
+            y_seq_truncated.append(seq[:seq_len].cpu().numpy())
+        return y_seq_truncated, -log_p
